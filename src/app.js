@@ -159,8 +159,8 @@ app.post("/status", async (req, res) => {
 
   try {
     const updatedParticipant = {
-      lastStatus: Date.now()
-    }
+      lastStatus: Date.now(),
+    };
     const result = await db
       .collection("participants")
       .updateOne({ name: user }, { $set: updatedParticipant });
@@ -173,6 +173,40 @@ app.post("/status", async (req, res) => {
     res.status(500).send(err.message);
   }
 });
+
+const removeInactiveParticipants = async () => {
+  const currentTime = Date.now();
+  try {
+    const participants = await db
+      .collection("participants")
+      .find({ lastStatus: { $lt: currentTime - 10 } })
+      .toArray();
+    if (participants.length <= 0) return;
+    await db
+      .collection("participants")
+      .deleteMany({ lastStatus: { $lt: currentTime - 10 } });
+
+    participants.forEach(async (participant) => {
+      const message = {
+        from: participant.name,
+        to: "Todos",
+        text: "sai da sala...",
+        type: "status",
+        time: dayjs(currentTime).format("HH:mm:ss"),
+      };
+      
+      try {
+        await db.collection("messages").insertOne(message);
+      } catch (err) {
+        res.status(500).send(err.message);
+      }
+    });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+};
+
+setInterval(removeInactiveParticipants, 15000);
 
 app.delete("/receitas/:id", async (req, res) => {
   const { id } = req.params;
