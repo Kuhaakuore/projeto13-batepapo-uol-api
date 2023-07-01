@@ -117,8 +117,38 @@ app.post("/messages", async (req, res) => {
   }
 });
 
-app.get("/receitas/:id", async (req, res) => {
-  const { id } = req.params;
+app.get("/messages", async (req, res) => {
+  const { user } = req.headers;
+  const limit  = parseInt(req.query.limit);
+
+  try {
+    const participant = await db
+      .collection("participants")
+      .findOne({ name: user });
+    if (!participant) return res.status(409).send("Participant do not exist!");
+
+    const messages = await db
+      .collection("messages")
+      .find({
+        $or: [
+          { type: "message" },
+          { to: "Todos" },
+          {
+            $and: [
+              { type: "private_message" },
+              { $or: [{ to: user }, { from: user }] },
+            ],
+          },
+        ],
+      })
+      .toArray();
+    if (limit === undefined) return res.send(messages);
+    if (limit <= 0 || typeof limit !== "number") return res.sendStatus(422);
+    
+    res.send(messages.slice(-limit).reverse());
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 
   try {
     const receita = await db
