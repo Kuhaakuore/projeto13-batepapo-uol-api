@@ -26,7 +26,6 @@ try {
 const db = mongoClient.db();
 
 // Endpoints
-
 app.post("/participants", async (req, res) => {
   const { name } = req.body;
 
@@ -79,31 +78,31 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   const { user } = req.headers;
-  const participant = await db
-    .collection("participants")
-    .findOne({ name: user });
-  if (!participant) return res.status(409).send("Participant do not exist!");
-
-  const schemaMessage = Joi.object({
-    to: Joi.string().required(),
-    text: Joi.string().required(),
-    type: Joi.allow("message", "private_message"),
-    from: Joi.required(),
-  });
-
-  const validation = schemaMessage.validate(
-    { ...req.body, from: user },
-    {
-      abortEarly: false,
-    }
-  );
-
-  if (validation.error) {
-    const errors = validation.error.details.map((detail) => detail.message);
-    return res.status(422).send(errors);
-  }
-
   try {
+    const participant = await db
+      .collection("participants")
+      .findOne({ name: user });
+    if (!participant) return res.status(409).send("Participant do not exist!");
+
+    const schemaMessage = Joi.object({
+      to: Joi.string().required(),
+      text: Joi.string().required(),
+      type: Joi.allow("message", "private_message"),
+      from: Joi.required(),
+    });
+
+    const validation = schemaMessage.validate(
+      { ...req.body, from: user },
+      {
+        abortEarly: false,
+      }
+    );
+
+    if (validation.error) {
+      const errors = validation.error.details.map((detail) => detail.message);
+      return res.status(422).send(errors);
+    }
+
     const message = {
       from: user,
       ...req.body,
@@ -119,7 +118,7 @@ app.post("/messages", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
   const { user } = req.headers;
-  const limit  = parseInt(req.query.limit);
+  const limit = req.query.limit;
 
   try {
     const participant = await db
@@ -142,19 +141,34 @@ app.get("/messages", async (req, res) => {
         ],
       })
       .toArray();
-    if (limit === undefined) return res.send(messages);
-    if (limit <= 0 || typeof limit !== "number") return res.sendStatus(422);
-    
-    res.send(messages.slice(-limit).reverse());
+
+    if (limit === undefined) return res.send(messages.reverse());
+    const limitValue = parseInt(limit);
+    if (limitValue <= 0 || isNaN(limitValue)) return res.sendStatus(422);
+
+    res.send(messages.slice(-limitValue).reverse());
   } catch (err) {
     res.status(500).send(err.message);
   }
+});
+
+app.post("/status", async (req, res) => {
+  const { user } = req.headers;
+
+  if (user === undefined) return res.sendStatus(404);
 
   try {
-    const receita = await db
-      .collection("receitas")
-      .findOne({ _id: new ObjectId(id) });
-    res.send(receita);
+    const updatedParticipant = {
+      lastStatus: Date.now()
+    }
+    const result = await db
+      .collection("participants")
+      .updateOne({ name: user }, { $set: updatedParticipant });
+
+    if (result.matchedCount === 0) {
+      return res.sendStatus(404);
+    }
+    res.sendStatus(200);
   } catch (err) {
     res.status(500).send(err.message);
   }
