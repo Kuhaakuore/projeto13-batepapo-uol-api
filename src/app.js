@@ -70,10 +70,10 @@ app.post("/participants", async (req, res) => {
   }
 });
 
-app.get("/receitas", async (req, res) => {
+app.get("/participants", async (req, res) => {
   try {
-    const receitas = await db.collection("receitas").find().toArray();
-    res.send(receitas);
+    const participants = await db.collection("participants").find().toArray();
+    res.send(participants);
   } catch (err) {
     res.status(500).send(err.message);
   }
