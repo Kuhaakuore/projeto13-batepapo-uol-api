@@ -44,10 +44,8 @@ app.post("/participants", async (req, res) => {
   }
 
   try {
-    let participant = await db
-      .collection("participants")
-      .findOne({ name: name });
-    if (participant) return res.status(409).send("Participant already exists!");
+    let participant = await db.collection("participants").findOne({ name });
+    if (participant) return res.status(409).send("Participant already exist!");
 
     participant = {
       name,
@@ -74,6 +72,46 @@ app.get("/participants", async (req, res) => {
   try {
     const participants = await db.collection("participants").find().toArray();
     res.send(participants);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.post("/messages", async (req, res) => {
+  const { user } = req.headers;
+  const participant = await db
+    .collection("participants")
+    .findOne({ name: user });
+  if (!participant) return res.status(409).send("Participant do not exist!");
+
+  const schemaMessage = Joi.object({
+    to: Joi.string().required(),
+    text: Joi.string().required(),
+    type: Joi.allow("message", "private_message"),
+    from: Joi.required(),
+  });
+
+  const validation = schemaMessage.validate(
+    { ...req.body, from: user },
+    {
+      abortEarly: false,
+    }
+  );
+
+  if (validation.error) {
+    const errors = validation.error.details.map((detail) => detail.message);
+    return res.status(422).send(errors);
+  }
+
+  try {
+    const message = {
+      from: user,
+      ...req.body,
+      time: dayjs(Date.now()).format("HH:mm:ss"),
+    };
+    await db.collection("messages").insertOne(message);
+
+    res.sendStatus(201);
   } catch (err) {
     res.status(500).send(err.message);
   }
