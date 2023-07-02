@@ -87,7 +87,7 @@ app.post("/messages", async (req, res) => {
       from: Joi.required(),
       to: Joi.string().required(),
       text: Joi.string().required(),
-      type: Joi.valid("message", "private_message"),
+      type: Joi.valid("message", "private_message").required(),
     });
 
     const validation = schemaMessage.validate(
@@ -244,7 +244,7 @@ app.put("/messages/:id", async (req, res) => {
       from: Joi.required(),
       to: Joi.string().required(),
       text: Joi.string().required(),
-      type: Joi.valid("message", "private_message"),
+      type: Joi.valid("message", "private_message").required(),
     });
 
     const validation = schemaMessage.validate(
