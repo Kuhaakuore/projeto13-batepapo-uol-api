@@ -79,9 +79,11 @@ app.post("/messages", async (req, res) => {
   const { user } = req.headers;
   if (user === undefined) return res.sendStatus(422);
   const name = stripHtml(user).result.trim();
+  
   try {
-    const participant = await db.collection("participants").findOne({ user });
+    const participant = await db.collection("participants").findOne({ name });
     if (!participant) return res.sendStatus(422);
+
     const schemaMessage = Joi.object({
       from: Joi.required(),
       to: Joi.string().required(),
