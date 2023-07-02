@@ -158,10 +158,8 @@ app.get("/messages", async (req, res) => {
 
 app.post("/status", async (req, res) => {
   const { user } = req.headers;
-  const name = stripHtml(user).result.trim();
-
   if (user === undefined) return res.sendStatus(404);
-
+  const name = stripHtml(user).result.trim();
   try {
     const updatedParticipant = {
       lastStatus: Date.now(),
