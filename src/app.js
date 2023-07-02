@@ -158,7 +158,7 @@ app.post("/status", async (req, res) => {
   const { user } = req.headers;
   const name = stripHtml(user).result.trim();
 
-  if (user === undefined) return res.status(404).send("Invalid user");
+  if (user === undefined) return res.sendStatus(404);
 
   try {
     const updatedParticipant = {
@@ -168,7 +168,7 @@ app.post("/status", async (req, res) => {
       .collection("participants")
       .updateOne({ name }, { $set: updatedParticipant });
 
-    if (result.matchedCount === 0) return res.status(404).send("Can't find user");
+    if (result.matchedCount === 0) return res.sendStatus(404);
 
     return res.sendStatus(200);
   } catch (err) {
@@ -177,16 +177,16 @@ app.post("/status", async (req, res) => {
 });
 
 const removeInactiveParticipants = async () => {
-  const currentTime = Date.now();
+  const now = Date.now();
   try {
     const participants = await db
       .collection("participants")
-      .find({ lastStatus: { $lt: currentTime - 10 } })
+      .find({ lastStatus: { $lt: now - 10000 } })
       .toArray();
     if (participants.length <= 0) return;
     await db
       .collection("participants")
-      .deleteMany({ lastStatus: { $lt: currentTime - 10 } });
+      .deleteMany({ lastStatus: { $lt: now - 10000 } });
 
     participants.forEach(async (participant) => {
       const message = {
@@ -194,7 +194,7 @@ const removeInactiveParticipants = async () => {
         to: "Todos",
         text: "sai da sala...",
         type: "status",
-        time: dayjs(currentTime).format("HH:mm:ss"),
+        time: dayjs(now).format("HH:mm:ss"),
       };
       try {
         await db.collection("messages").insertOne(message);
@@ -207,7 +207,6 @@ const removeInactiveParticipants = async () => {
   }
 };
 
-removeInactiveParticipants();
 setInterval(removeInactiveParticipants, 15000);
 
 app.delete("/messages/:id", async (req, res) => {
