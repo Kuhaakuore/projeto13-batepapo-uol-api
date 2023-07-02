@@ -4,11 +4,12 @@ import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import Joi from "joi";
 import dayjs from "dayjs";
+import { stripHtml } from "string-strip-html";
 
 // App creation
 const app = express();
 
-// Configurations
+// Configs
 app.use(cors());
 app.use(express.json());
 dotenv.config();
@@ -27,24 +28,24 @@ const db = mongoClient.db();
 
 // Endpoints
 app.post("/participants", async (req, res) => {
-  const { name } = req.body;
+  const name = stripHtml(req.body.name).result.trim();
+  let participant = {
+    name,
+  };
 
   const schemaParticipant = Joi.object({
     name: Joi.string().required(),
   });
 
-  const validation = schemaParticipant.validate(req.body, {
+  const validation = schemaParticipant.validate(participant, {
     abortEarly: false,
   });
 
-  if (validation.error) {
-    const errors = validation.error.details.map((detail) => detail.message);
-    return res.status(422).send(errors);
-  }
+  if (validation.error) return res.sendStatus(422);
 
   try {
-    let participant = await db.collection("participants").findOne({ name });
-    if (participant) return res.status(409).send("Participant already exist!");
+    participant = await db.collection("participants").findOne({ name });
+    if (participant) return res.sendStatus(409);
 
     participant = {
       name,
@@ -78,34 +79,37 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   const { user } = req.headers;
+  const name = stripHtml(user).result.trim();
+
   try {
-    const participant = await db
-      .collection("participants")
-      .findOne({ name: user });
-    if (!participant) return res.status(409).send("Participant do not exist!");
+    const participant = await db.collection("participants").findOne({ name });
+    if (!participant) return res.sendStatus(422);
 
     const schemaMessage = Joi.object({
+      from: Joi.required(),
       to: Joi.string().required(),
       text: Joi.string().required(),
-      type: Joi.allow("message", "private_message"),
-      from: Joi.required(),
+      type: Joi.valid("message", "private_message"),
     });
 
+    const sanitizedParams = {
+      from: name,
+      to: stripHtml(req.body.to).result.trim(),
+      text: stripHtml(req.body.text).result.trim(),
+      type: stripHtml(req.body.type).result.trim(),
+    };
+
     const validation = schemaMessage.validate(
-      { ...req.body, from: user },
+      { ...sanitizedParams },
       {
         abortEarly: false,
       }
     );
 
-    if (validation.error) {
-      const errors = validation.error.details.map((detail) => detail.message);
-      return res.status(422).send(errors);
-    }
+    if (validation.error) return res.sendStatus(422);
 
     const message = {
-      from: user,
-      ...req.body,
+      ...sanitizedParams,
       time: dayjs(Date.now()).format("HH:mm:ss"),
     };
     await db.collection("messages").insertOne(message);
@@ -118,13 +122,14 @@ app.post("/messages", async (req, res) => {
 
 app.get("/messages", async (req, res) => {
   const { user } = req.headers;
+  const name = stripHtml(user).result.trim();
   const limit = req.query.limit;
 
   try {
     const participant = await db
       .collection("participants")
-      .findOne({ name: user });
-    if (!participant) return res.status(409).send("Participant do not exist!");
+      .findOne({ name });
+    if (!participant) return res.sendStatus(409);
 
     const messages = await db
       .collection("messages")
@@ -154,6 +159,7 @@ app.get("/messages", async (req, res) => {
 
 app.post("/status", async (req, res) => {
   const { user } = req.headers;
+  const name = stripHtml(user).result.trim();
 
   if (user === undefined) return res.sendStatus(404);
 
@@ -163,11 +169,12 @@ app.post("/status", async (req, res) => {
     };
     const result = await db
       .collection("participants")
-      .updateOne({ name: user }, { $set: updatedParticipant });
+      .updateOne({ name }, { $set: updatedParticipant });
 
     if (result.matchedCount === 0) {
       return res.sendStatus(404);
     }
+
     res.sendStatus(200);
   } catch (err) {
     res.status(500).send(err.message);
@@ -194,7 +201,6 @@ const removeInactiveParticipants = async () => {
         type: "status",
         time: dayjs(currentTime).format("HH:mm:ss"),
       };
-      
       try {
         await db.collection("messages").insertOne(message);
       } catch (err) {
@@ -208,70 +214,72 @@ const removeInactiveParticipants = async () => {
 
 setInterval(removeInactiveParticipants, 15000);
 
-app.delete("/receitas/:id", async (req, res) => {
+app.delete("/messages/:id", async (req, res) => {
   const { id } = req.params;
+  const { user } = req.headers;
+  const name = stripHtml(user).result.trim();
 
   try {
-    const result = await db
-      .collection("receitas")
-      .deleteOne({ _id: new ObjectId(id) });
-    if (result.deletedCount === 0)
-      return res.status(404).send("Essa receita não existe!");
+    const message = await db
+      .collection("messages")
+      .findOne({ _id: new ObjectId(id) });
+    if (!message) return res.sendStatus(404);
+    if (message.from !== name) return res.sendStatus(401);
 
-    res.status(204).send("Receita deletada com sucesso!");
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
-
-app.delete("/receitas/muitas/:filtroIngredientes", async (req, res) => {
-  const { filtroIngredientes } = req.params;
-
-  try {
-    await db
-      .collection("receitas")
-      .deleteMany({ ingredientes: filtroIngredientes });
-    res.sendStatus(204);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
-
-app.put("/receitas/:id", async (req, res) => {
-  const { id } = req.params;
-  const { titulo, preparo, ingredientes } = req.body;
-
-  try {
-    // result tem:  matchedCount  (quantidade de itens que encotrou com esse id)
-    // 				modifiedCount (quantidade de itens que de fato mudaram com a edição)
-    const result = await db
-      .collection("receitas")
-      .updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { titulo, preparo, ingredientes } }
-      );
-    if (result.matchedCount === 0)
-      return res.status(404).send("esse item não existe!");
-    res.send("Receita atualizada!");
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
-
-app.put("/receitas/muitas/:filtroIngredientes", async (req, res) => {
-  const { filtroIngredientes } = req.params;
-  const { titulo, ingredientes, preparo } = req.body;
-
-  try {
-    await db
-      .collection("receitas")
-      .updateMany(
-        { ingredientes: { $regex: filtroIngredientes, $options: "i" } },
-        { $set: { titulo } }
-      );
+    await db.collection("messages").deleteOne({ _id: new ObjectId(id) });
     res.sendStatus(200);
   } catch (err) {
-    return res.status(500).send(err.message);
+    res.status(500).send(err.message);
+  }
+});
+
+app.put("/messages/:id", async (req, res) => {
+  const { id } = req.params;
+  const { user } = req.headers;
+  const name = stripHtml(user).result.trim();
+
+  try {
+    const participant = await db
+      .collection("participants")
+      .findOne({ name });
+    if (!participant) return res.sendStatus(422);
+
+    const schemaMessage = Joi.object({
+      from: Joi.required(),
+      to: Joi.string().required(),
+      text: Joi.string().required(),
+      type: Joi.valid("message", "private_message"),
+    });
+
+    const sanitizedParams = {
+      from: name,
+      to: stripHtml(req.body.to).result.trim(),
+      text: stripHtml(req.body.text).result.trim(),
+      type: stripHtml(req.body.type).result.trim(),
+    };
+
+    const validation = schemaMessage.validate(
+      { ...sanitizedParams },
+      {
+        abortEarly: false,
+      }
+    );
+
+    if (validation.error) return res.sendStatus(422);
+
+    const message = await db
+      .collection("messages")
+      .findOne({ _id: new ObjectId(id) });
+    if (!message) return res.sendStatus(404);
+    if (message.from !== user) return res.sendStatus(401);
+
+    await db
+      .collection("messages")
+      .updateOne({ _id: new ObjectId(id) }, { $set: { ...sanitizedParams } });
+
+    res.sendStatus(200);
+  } catch (err) {
+    res.status(500).send(err.message);
   }
 });
 
