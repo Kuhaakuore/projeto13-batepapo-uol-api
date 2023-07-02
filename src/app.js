@@ -77,12 +77,11 @@ app.get("/participants", async (req, res) => {
 
 app.post("/messages", async (req, res) => {
   const { user } = req.headers;
+  if (user === undefined) return res.sendStatus(422);
   const name = stripHtml(user).result.trim();
-
   try {
-    const participant = await db.collection("participants").findOne({ name });
+    const participant = await db.collection("participants").findOne({ user });
     if (!participant) return res.sendStatus(422);
-
     const schemaMessage = Joi.object({
       from: Joi.required(),
       to: Joi.string().required(),
@@ -159,7 +158,7 @@ app.post("/status", async (req, res) => {
   const { user } = req.headers;
   const name = stripHtml(user).result.trim();
 
-  if (user === undefined) return res.sendStatus(404);
+  if (user === undefined) return res.status(404).send("Invalid user");
 
   try {
     const updatedParticipant = {
@@ -169,7 +168,7 @@ app.post("/status", async (req, res) => {
       .collection("participants")
       .updateOne({ name }, { $set: updatedParticipant });
 
-    if (result.matchedCount === 0) return res.sendStatus(404);
+    if (result.matchedCount === 0) return res.status(404).send("Can't find user");
 
     return res.sendStatus(200);
   } catch (err) {
@@ -208,6 +207,7 @@ const removeInactiveParticipants = async () => {
   }
 };
 
+removeInactiveParticipants();
 setInterval(removeInactiveParticipants, 15000);
 
 app.delete("/messages/:id", async (req, res) => {
