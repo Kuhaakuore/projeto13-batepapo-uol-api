@@ -60,18 +60,18 @@ app.post("/participants", async (req, res) => {
     };
     await db.collection("messages").insertOne(message);
 
-    res.sendStatus(201);
+    return res.sendStatus(201);
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
 app.get("/participants", async (req, res) => {
   try {
     const participants = await db.collection("participants").find().toArray();
-    res.send(participants);
+    return res.send(participants);
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
@@ -112,9 +112,9 @@ app.post("/messages", async (req, res) => {
     };
     await db.collection("messages").insertOne(message);
 
-    res.sendStatus(201);
+    return res.sendStatus(201);
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
@@ -149,9 +149,9 @@ app.get("/messages", async (req, res) => {
     const limitValue = parseInt(limit);
     if (limitValue <= 0 || isNaN(limitValue)) return res.sendStatus(422);
 
-    res.send(messages.slice(-limitValue).reverse());
+    return res.send(messages.slice(-limitValue).reverse());
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
@@ -171,9 +171,9 @@ app.post("/status", async (req, res) => {
 
     if (result.matchedCount === 0) return res.sendStatus(404);
 
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
@@ -200,15 +200,15 @@ const removeInactiveParticipants = async () => {
       try {
         await db.collection("messages").insertOne(message);
       } catch (err) {
-        res.status(500).send(err.message);
+        console.log(err.message);
       }
     });
   } catch (err) {
-    res.status(500).send(err.message);
+    console.log(err.message);
   }
 };
 
-// setInterval(removeInactiveParticipants, 15000);
+setInterval(removeInactiveParticipants, 15000);
 
 app.delete("/messages/:id", async (req, res) => {
   const { id } = req.params;
@@ -223,9 +223,9 @@ app.delete("/messages/:id", async (req, res) => {
     if (message.from !== name) return res.sendStatus(401);
 
     await db.collection("messages").deleteOne({ _id: new ObjectId(id) });
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
@@ -273,9 +273,9 @@ app.put("/messages/:id", async (req, res) => {
       .collection("messages")
       .updateOne({ _id: new ObjectId(id) }, { $set: { ...sanitizedParams } });
 
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (err) {
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 
