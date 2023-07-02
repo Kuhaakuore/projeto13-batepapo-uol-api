@@ -28,23 +28,21 @@ const db = mongoClient.db();
 
 // Endpoints
 app.post("/participants", async (req, res) => {
-  const name = stripHtml(req.body.name).result.trim();
-  let participant = {
-    name,
-  };
 
   const schemaParticipant = Joi.object({
     name: Joi.string().required(),
   });
 
-  const validation = schemaParticipant.validate(participant, {
+  const validation = schemaParticipant.validate(req.body, {
     abortEarly: false,
   });
 
   if (validation.error) return res.sendStatus(422);
 
+  const name = stripHtml(req.body.name).result.trim();
+
   try {
-    participant = await db.collection("participants").findOne({ name });
+    let participant = await db.collection("participants").findOne({ name });
     if (participant) return res.sendStatus(409);
 
     participant = {
@@ -92,21 +90,21 @@ app.post("/messages", async (req, res) => {
       type: Joi.valid("message", "private_message"),
     });
 
-    const sanitizedParams = {
-      from: name,
-      to: stripHtml(req.body.to).result.trim(),
-      text: stripHtml(req.body.text).result.trim(),
-      type: stripHtml(req.body.type).result.trim(),
-    };
-
     const validation = schemaMessage.validate(
-      { ...sanitizedParams },
+      { from: user, ...req.body },
       {
         abortEarly: false,
       }
     );
 
     if (validation.error) return res.sendStatus(422);
+
+    const sanitizedParams = {
+      from: name,
+      to: stripHtml(req.body.to).result.trim(),
+      text: stripHtml(req.body.text).result.trim(),
+      type: stripHtml(req.body.type).result.trim(),
+    };
 
     const message = {
       ...sanitizedParams,
@@ -171,9 +169,7 @@ app.post("/status", async (req, res) => {
       .collection("participants")
       .updateOne({ name }, { $set: updatedParticipant });
 
-    if (result.matchedCount === 0) {
-      return res.sendStatus(404);
-    }
+    if (result.matchedCount === 0) return res.sendStatus(404);
 
     res.sendStatus(200);
   } catch (err) {
@@ -212,7 +208,7 @@ const removeInactiveParticipants = async () => {
   }
 };
 
-setInterval(removeInactiveParticipants, 15000);
+// setInterval(removeInactiveParticipants, 15000);
 
 app.delete("/messages/:id", async (req, res) => {
   const { id } = req.params;
@@ -251,21 +247,21 @@ app.put("/messages/:id", async (req, res) => {
       type: Joi.valid("message", "private_message"),
     });
 
-    const sanitizedParams = {
-      from: name,
-      to: stripHtml(req.body.to).result.trim(),
-      text: stripHtml(req.body.text).result.trim(),
-      type: stripHtml(req.body.type).result.trim(),
-    };
-
     const validation = schemaMessage.validate(
-      { ...sanitizedParams },
+      { from: name, ...req.body },
       {
         abortEarly: false,
       }
     );
 
     if (validation.error) return res.sendStatus(422);
+
+    const sanitizedParams = {
+      from: name,
+      to: stripHtml(req.body.to).result.trim(),
+      text: stripHtml(req.body.text).result.trim(),
+      type: stripHtml(req.body.type).result.trim(),
+    };
 
     const message = await db
       .collection("messages")
